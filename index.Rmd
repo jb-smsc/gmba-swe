@@ -1,0 +1,134 @@
+---
+title: "GMBA SWE anomalies 2024"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+    theme: 
+      version: 5
+      bootswatch: morph
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(dplyr)
+library(stringr)
+library(sf)
+library(leaflet)
+library(htmltools)
+library(rmapshaper)
+```
+
+
+```{r data-prep}
+sf_swe <- read_sf("data-raw/SWE 1st Apr anomaly 2024.geojson")
+
+# sf_swe2 <- st_simplify(sf_swe, preserveTopology = T, dTolerance = 2000)
+# sf_swe3 <- st_cast(sf_swe2, "MULTIPOLYGON")
+
+sf_swe2 <- ms_simplify(sf_swe, keep = 0.2, keep_shapes = FALSE)
+
+sf_plot <- sf_swe2 %>% 
+  filter(!is.na(relAno2024)) %>% 
+  mutate(xx_col = if_else(relAno2024 > 100, 100, relAno2024)) %>% 
+  rename(Name = MapName, 
+         peak_SWE_2024_anomaly = relAno2024,
+         peak_SWE_2024 = peakSweCurrent20242024_mean,
+         peak_SWE_clim_1992_2020 = peakSwe19912020_mean) %>% 
+  mutate(labels = str_c(
+    "<table>",
+    "<tr><th style='text-align: left'>", Name, "</th></tr>",
+    "<tr>", 
+    "<td>", "peak SWE 2024 anomaly:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%i %%", peak_SWE_2024_anomaly), "</td>",
+    "</tr>",
+    "<tr>", 
+    "<td>", "peak SWE 2024:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.2f m", peak_SWE_2024), "</td>",
+    "</tr>",
+    "<tr>", 
+    "<td>", "peak SWE average 1992-2020:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.2f m", peak_SWE_clim_1992_2020), "</td>",
+    "</tr>",
+    "</table>"
+  )) 
+
+pal <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = F)
+pal2 <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = T)
+```
+
+
+
+# Map
+
+## Column 
+
+### Map
+
+```{r map}
+leaflet(sf_plot) %>%
+  addProviderTiles("CartoDB.Positron", group = "CartoDB") %>% 
+  addProviderTiles("Esri.WorldTopoMap", group = "Topomap") %>% 
+  addProviderTiles("Esri.WorldImagery", group = "WorldImagery") %>% 
+  addPolygons(
+    fillColor = ~pal(xx_col),
+    fillOpacity = 1,
+    color = ~pal(xx_col),
+    opacity = 1,
+    # stroke = FALSE,
+    weight = 0,
+    highlightOptions = highlightOptions(
+      color = "black",
+      weight = 2,
+      # dashArray = ""
+      bringToFront = TRUE
+    ),
+    label = lapply(sf_plot$labels, htmltools::HTML),
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "12px",
+      offset = c(20, 20),
+      direction = "auto")
+  ) %>% 
+  addLayersControl(
+    baseGroups = c("CartoDB", "Topomap", "WorldImagery"),
+    position = "topright"
+  ) %>% 
+  addLegend(pal = pal2, values = ~xx_col, opacity = 1, 
+            title = "Peak SWE</br>2024 anomaly",
+            position = "bottomright",
+            labFormat = labelFormat(transform = \(x) sort(x, decreasing = TRUE),
+                                    suffix = " %"))
+  
+```
+
+# About
+
+## Column 
+
+### About
+
+
+This is a contribution to the IACS joint body on mountain snow cover, working group 2.
+
+Peak snow water equivalent (SWE) extracted from ERA5-Land for the GMBA mountain inventory v2.0. Peak SWE is taken as for Apr 1. Maps show anomalies of the 2023-2024 season relative to the climatology 1991-2020.
+
+GBMA polygons have been simplified by a factor of 5 for simpler and faster online accessibility.
+
+Data processing by S. Gascoin ([sgascoin](https://github.com/sgascoin))
+
+Dashboard by M. Matiu ([mitmat](https://github.com/mitmat))
+
+
+### References 
+
+Snethlage, M.A., Geschke, J., Spehn, E.M., Ranipeta, A., Yoccoz, N.G., Körner, Ch., Jetz, W., Fischer, M. & Urbach, D. A hierarchical inventory of the world’s mountains for global comparative mountain science. Nature Scientific Data. https://doi.org/10.1038/s41597-022-01256-y (2022).
+Dataset
+
+Snethlage, M.A., Geschke, J., Spehn, E.M., Ranipeta, A., Yoccoz, N.G., Körner, Ch., Jetz, W., Fischer, M. & Urbach, D. GMBA Mountain Inventory v2. GMBA-EarthEnv. https://doi.org/10.48601/earthenv-t9k2-1407 (2022).
+
+Muñoz Sabater, J. (2019): ERA5-Land hourly data from 1950 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS). https://doi.org/10.24381/cds.e2161bac. Date Accessed 04-24-2024. 
+
+
+
