@@ -40,16 +40,16 @@ sf_plot <- sf_swe2 %>%
     "<table>",
     "<tr><th style='text-align: left'>", Name, "</th></tr>",
     "<tr>", 
-    "<td>", "peak SWE 2024 anomaly:", "</td>",
+    "<td>", "01 April SWE 2024 anomaly:", "</td>",
     "<td style='text-align: right; padding-left: 15px;'>", sprintf("%i %%", peak_SWE_2024_anomaly), "</td>",
     "</tr>",
     "<tr>", 
-    "<td>", "peak SWE 2024:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.2f m", peak_SWE_2024), "</td>",
+    "<td>", "01 April SWE 2024:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", 1000*peak_SWE_2024), "</td>",
     "</tr>",
     "<tr>", 
-    "<td>", "peak SWE average 1992-2020:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.2f m", peak_SWE_clim_1992_2020), "</td>",
+    "<td>", "01 April SWE average 1991-2020:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", 1000*peak_SWE_clim_1992_2020), "</td>",
     "</tr>",
     "</table>"
   )) 
@@ -96,7 +96,7 @@ leaflet(sf_plot) %>%
     position = "topright"
   ) %>% 
   addLegend(pal = pal2, values = ~xx_col, opacity = 1, 
-            title = "Peak SWE</br>2024 anomaly",
+            title = "01 April SWE</br>2024 anomaly",
             position = "bottomright",
             labFormat = labelFormat(transform = \(x) sort(x, decreasing = TRUE),
                                     suffix = " %"))
