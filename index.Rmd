@@ -21,7 +21,7 @@ library(rmapshaper)
 ```
 
 
-```{r data-prep}
+```{r data-prep-era5l}
 sf_swe <- read_sf("data-raw/SWE 1st Apr anomaly 2024.geojson")
 
 # sf_swe2 <- st_simplify(sf_swe, preserveTopology = T, dTolerance = 2000)
@@ -31,7 +31,7 @@ sf_swe2 <- ms_simplify(sf_swe, keep = 0.2, keep_shapes = FALSE)
 
 sf_plot <- sf_swe2 %>% 
   filter(!is.na(relAno2024)) %>% 
-  mutate(xx_col = if_else(relAno2024 > 100, 100, relAno2024)) %>% 
+  mutate(xx_col = if_else(relAno2024 > 150, 150, relAno2024) %>% as.integer) %>% 
   rename(Name = MapName, 
          peak_SWE_2024_anomaly = relAno2024,
          peak_SWE_2024 = peakSweCurrent20242024_mean,
@@ -54,8 +54,56 @@ sf_plot <- sf_swe2 %>%
     "</table>"
   )) 
 
-pal <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = F)
-pal2 <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = T)
+# pal <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = F)
+# pal2 <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = T)
+
+pal_pos <- colorRampPalette(colors = c("#ffffbf", "#2c7bb6"), space = "Lab")(150)
+pal_neg <- colorRampPalette(colors = c("#d7191c", "#ffffbf"), space = "Lab")(100)
+
+pal <- colorNumeric(palette = c(pal_neg, pal_pos), domain = c(-100, 150))
+pal2 <- colorNumeric(palette = c(pal_neg, pal_pos), domain = c(-100, 150), reverse = T)
+
+# previewColors(colorNumeric(palette = c(pal_neg, pal_pos), domain = NULL), values = -100:150)
+
+```
+
+
+```{r data-prep-stations}
+
+sf_snotel <- readr::read_csv("data-raw/1Apil2024_SNOTEL_anom.csv",
+                             show_col_types = FALSE) %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+sf_bcab <- readr::read_csv("data-raw/1Apil2024_BCAB_anom.csv",
+                           show_col_types = FALSE) %>% 
+  st_as_sf(coords = c("lon", "lat"), crs = 4326)
+
+sf_stn <- bind_rows(sf_snotel, sf_bcab)
+
+sf_plot_stn <- sf_stn %>% 
+  mutate(xx_col = if_else(anom_pct > 150, 150, anom_pct) %>% as.integer) %>% 
+  mutate(Name = str_to_title(station_name)) %>% 
+  rename(peak_SWE_2024_anomaly = anom_pct,
+         peak_SWE_2024 = snw,
+         peak_SWE_clim_1992_2020 = clm) %>% 
+  mutate(labels = str_c(
+    "<table>",
+    "<tr><th style='text-align: left'>", Name, "</th></tr>",
+    "<tr>", 
+    "<td>", "01 April SWE 2024 anomaly:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%i %%", peak_SWE_2024_anomaly), "</td>",
+    "</tr>",
+    "<tr>", 
+    "<td>", "01 April SWE 2024:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", peak_SWE_2024), "</td>",
+    "</tr>",
+    "<tr>", 
+    "<td>", "01 April SWE average 1991-2020:", "</td>",
+    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", peak_SWE_clim_1992_2020), "</td>",
+    "</tr>",
+    "</table>"
+  )) 
+
 ```
 
 
@@ -72,19 +120,38 @@ leaflet(sf_plot) %>%
   addProviderTiles("Esri.WorldTopoMap", group = "Topomap") %>% 
   addProviderTiles("Esri.WorldImagery", group = "WorldImagery") %>% 
   addPolygons(
+    data = sf_plot,
     fillColor = ~pal(xx_col),
     fillOpacity = 1,
     color = ~pal(xx_col),
     opacity = 1,
     # stroke = FALSE,
     weight = 0,
+    group = "ERA5-Land",
     highlightOptions = highlightOptions(
       color = "black",
       weight = 2,
       # dashArray = ""
-      bringToFront = TRUE
+      bringToFront = FALSE
     ),
     label = lapply(sf_plot$labels, htmltools::HTML),
+    labelOptions = labelOptions(
+      style = list("font-weight" = "normal", padding = "3px 8px"),
+      textsize = "12px",
+      offset = c(20, 20),
+      direction = "auto")
+  ) %>%
+  addCircleMarkers(
+    data = sf_plot_stn,
+    stroke = TRUE,
+    weight = 1,
+    color = grey(0.3),
+    opacity = 1,
+    fillOpacity = 1,
+    fillColor = ~pal(xx_col),
+    radius = 5,
+    group = "In-situ",
+    label = lapply(sf_plot_stn$labels, htmltools::HTML),
     labelOptions = labelOptions(
       style = list("font-weight" = "normal", padding = "3px 8px"),
       textsize = "12px",
@@ -93,9 +160,11 @@ leaflet(sf_plot) %>%
   ) %>% 
   addLayersControl(
     baseGroups = c("CartoDB", "Topomap", "WorldImagery"),
+    overlayGroups = c("ERA5-Land", "In-situ"),
     position = "topright"
   ) %>% 
-  addLegend(pal = pal2, values = ~xx_col, opacity = 1, 
+  hideGroup("In-situ") %>%
+  addLegend(pal = pal2, values = c(-100, 150), opacity = 1, 
             title = "01 April SWE</br>2024 anomaly",
             position = "bottomright",
             labFormat = labelFormat(transform = \(x) sort(x, decreasing = TRUE),
@@ -104,6 +173,25 @@ leaflet(sf_plot) %>%
 ```
 
 # About
+
+## Column 
+
+### Notes
+
+Note that ERA5-Land has a simplistic snow scheme and coarse resolution for complex mountain terrain, but nonetheless shows good accuracy for large-scale SWE monitoring (see references). Positive SWE anomalies capped to a maximum of 150%. 
+
+SWE values (and consequently anomalies) for glaciated areas, such as in the Arctic, might not be reliable.
+
+### Version history
+
+v0.2 (2024-06-14)
+
+- added more references and notes in About page
+- added in-situ anomalies to main map, layer turned off by default (only North America, see also [here](https://github.com/jb-smsc/snotel_anoms))
+
+v0.1 (2024-05-29)
+
+- first online version
 
 ## Column 
 
@@ -116,9 +204,9 @@ Peak snow water equivalent (SWE) extracted from ERA5-Land for the GMBA mountain 
 
 GBMA polygons have been simplified by a factor of 5 for simpler and faster online accessibility.
 
-Data processing by S. Gascoin ([sgascoin](https://github.com/sgascoin))
+ERA5-Land processing by S. Gascoin ([sgascoin](https://github.com/sgascoin)), in-situ data by C. Mortimer ([mortc](https://github.com/mortc)), dashboard by M. Matiu ([mitmat](https://github.com/mitmat))
 
-Dashboard by M. Matiu ([mitmat](https://github.com/mitmat))
+
 
 
 ### References 
@@ -130,5 +218,7 @@ Snethlage, M.A., Geschke, J., Spehn, E.M., Ranipeta, A., Yoccoz, N.G., Körner, 
 
 Muñoz Sabater, J. (2019): ERA5-Land hourly data from 1950 to present. Copernicus Climate Change Service (C3S) Climate Data Store (CDS). https://doi.org/10.24381/cds.e2161bac. Date Accessed 04-24-2024. 
 
+Sourp, L., Gascoin, S., Jarlan, L., Pedinotti, V., Bormann, K. J., and Baba, M. W.: Evaluation of high resolution snowpack simulations from global datasets and comparison with Sentinel-1 snow depth retrievals in the Sierra Nevada, USA, EGUsphere [preprint], https://doi.org/10.5194/egusphere-2024-791, 2024. 
 
+Mudryk, L., Mortimer, C., Derksen, C., Elias Chereque, A., and Kushner, P.: Benchmarking of SWE products based on outcomes of the SnowPEx+ Intercomparison Project, EGUsphere [preprint], https://doi.org/10.5194/egusphere-2023-3014, 2024. 
 
