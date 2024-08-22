@@ -81,6 +81,7 @@ sf_bcab <- readr::read_csv("data-raw/1Apil2024_BCAB_anom.csv",
 sf_stn <- bind_rows(sf_snotel, sf_bcab)
 
 sf_plot_stn <- sf_stn %>% 
+  filter(nyrs > 20) %>% 
   mutate(xx_col = if_else(anom_pct > 150, 150, anom_pct) %>% as.integer) %>% 
   mutate(Name = str_to_title(station_name)) %>% 
   rename(peak_SWE_2024_anomaly = anom_pct,
