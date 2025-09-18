@@ -1,189 +1,47 @@
 ---
-title: "GMBA SWE anomalies 2024"
-output: 
-  flexdashboard::flex_dashboard:
-    vertical_layout: fill
-    theme: 
+title: "GMBA SWE anomalies"
+output:
+  html_document:
+    theme:
+      bslib: true
       version: 5
-      bootswatch: morph
-editor_options: 
-  chunk_output_type: console
+      bootswatch: yeti
 ---
 
-```{r setup, include=FALSE}
-library(flexdashboard)
-library(dplyr)
-library(stringr)
-library(sf)
-library(leaflet)
-library(htmltools)
-library(rmapshaper)
-```
+<a href="2025.html" class="btn btn-primary" role="button">&rarr; 2025 anomalies</a>
 
 
-```{r data-prep-era5l}
-sf_swe <- read_sf("data-raw/SWE 1st Apr anomaly 2024.geojson")
-
-# sf_swe2 <- st_simplify(sf_swe, preserveTopology = T, dTolerance = 2000)
-# sf_swe3 <- st_cast(sf_swe2, "MULTIPOLYGON")
-
-sf_swe2 <- ms_simplify(sf_swe, keep = 0.2, keep_shapes = FALSE)
-
-sf_plot <- sf_swe2 %>% 
-  filter(!is.na(relAno2024)) %>% 
-  mutate(xx_col = if_else(relAno2024 > 150, 150, relAno2024) %>% as.integer) %>% 
-  rename(Name = MapName, 
-         peak_SWE_2024_anomaly = relAno2024,
-         peak_SWE_2024 = peakSweCurrent20242024_mean,
-         peak_SWE_clim_1992_2020 = peakSwe19912020_mean) %>% 
-  mutate(labels = str_c(
-    "<table>",
-    "<tr><th style='text-align: left'>", Name, "</th></tr>",
-    "<tr>", 
-    "<td>", "01 April SWE 2024 anomaly:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%i %%", peak_SWE_2024_anomaly), "</td>",
-    "</tr>",
-    "<tr>", 
-    "<td>", "01 April SWE 2024:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", 1000*peak_SWE_2024), "</td>",
-    "</tr>",
-    "<tr>", 
-    "<td>", "01 April SWE average 1991-2020:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", 1000*peak_SWE_clim_1992_2020), "</td>",
-    "</tr>",
-    "</table>"
-  )) 
-
-# pal <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = F)
-# pal2 <- colorNumeric("RdYlBu", domain = sf_plot$xx_col, reverse = T)
-
-pal_pos <- colorRampPalette(colors = c("#ffffbf", "#2c7bb6"), space = "Lab")(150)
-pal_neg <- colorRampPalette(colors = c("#d7191c", "#ffffbf"), space = "Lab")(100)
-
-pal <- colorNumeric(palette = c(pal_neg, pal_pos), domain = c(-100, 150))
-pal2 <- colorNumeric(palette = c(pal_neg, pal_pos), domain = c(-100, 150), reverse = T)
-
-# previewColors(colorNumeric(palette = c(pal_neg, pal_pos), domain = NULL), values = -100:150)
-
-```
+<a href="2024.html" class="btn btn-primary" role="button">&rarr; 2024 anomalies</a>
 
 
-```{r data-prep-stations}
-
-sf_snotel <- readr::read_csv("data-raw/1Apil2024_SNOTEL_anom.csv",
-                             show_col_types = FALSE) %>% 
-  st_as_sf(coords = c("lon", "lat"), crs = 4326)
-
-sf_bcab <- readr::read_csv("data-raw/1Apil2024_BCAB_anom.csv",
-                           show_col_types = FALSE) %>% 
-  st_as_sf(coords = c("lon", "lat"), crs = 4326)
-
-sf_stn <- bind_rows(sf_snotel, sf_bcab)
-
-sf_plot_stn <- sf_stn %>% 
-  filter(nyrs > 20) %>% 
-  mutate(xx_col = if_else(anom_pct > 150, 150, anom_pct) %>% as.integer) %>% 
-  mutate(Name = str_to_title(station_name)) %>% 
-  rename(peak_SWE_2024_anomaly = anom_pct,
-         peak_SWE_2024 = snw,
-         peak_SWE_clim_1992_2020 = clm) %>% 
-  mutate(labels = str_c(
-    "<table>",
-    "<tr><th style='text-align: left'>", Name, "</th></tr>",
-    "<tr>", 
-    "<td>", "01 April SWE 2024 anomaly:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%i %%", peak_SWE_2024_anomaly), "</td>",
-    "</tr>",
-    "<tr>", 
-    "<td>", "01 April SWE 2024:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", peak_SWE_2024), "</td>",
-    "</tr>",
-    "<tr>", 
-    "<td>", "01 April SWE average 1991-2020:", "</td>",
-    "<td style='text-align: right; padding-left: 15px;'>", sprintf("%0.1f mm", peak_SWE_clim_1992_2020), "</td>",
-    "</tr>",
-    "</table>"
-  )) 
-
-```
-
-
-
-# Map
-
-## Column 
-
-### Map
-
-```{r map}
-leaflet(sf_plot) %>%
-  addProviderTiles("CartoDB.Positron", group = "CartoDB") %>% 
-  addProviderTiles("Esri.WorldTopoMap", group = "Topomap") %>% 
-  addProviderTiles("Esri.WorldImagery", group = "WorldImagery") %>% 
-  addPolygons(
-    data = sf_plot,
-    fillColor = ~pal(xx_col),
-    fillOpacity = 1,
-    color = ~pal(xx_col),
-    opacity = 1,
-    # stroke = FALSE,
-    weight = 0,
-    group = "ERA5-Land",
-    highlightOptions = highlightOptions(
-      color = "black",
-      weight = 2,
-      # dashArray = ""
-      bringToFront = FALSE
-    ),
-    label = lapply(sf_plot$labels, htmltools::HTML),
-    labelOptions = labelOptions(
-      style = list("font-weight" = "normal", padding = "3px 8px"),
-      textsize = "12px",
-      offset = c(20, 20),
-      direction = "auto")
-  ) %>%
-  addCircleMarkers(
-    data = sf_plot_stn,
-    stroke = TRUE,
-    weight = 1,
-    color = grey(0.3),
-    opacity = 1,
-    fillOpacity = 1,
-    fillColor = ~pal(xx_col),
-    radius = 5,
-    group = "In-situ",
-    label = lapply(sf_plot_stn$labels, htmltools::HTML),
-    labelOptions = labelOptions(
-      style = list("font-weight" = "normal", padding = "3px 8px"),
-      textsize = "12px",
-      offset = c(20, 20),
-      direction = "auto")
-  ) %>% 
-  addLayersControl(
-    baseGroups = c("CartoDB", "Topomap", "WorldImagery"),
-    overlayGroups = c("ERA5-Land", "In-situ"),
-    position = "topright"
-  ) %>% 
-  hideGroup("In-situ") %>%
-  addLegend(pal = pal2, values = c(-100, 150), opacity = 1, 
-            title = "01 April SWE</br>2024 anomaly",
-            position = "bottomright",
-            labFormat = labelFormat(transform = \(x) sort(x, decreasing = TRUE),
-                                    suffix = " %"))
-  
-```
 
 # About
 
-## Column 
+This is a contribution to the IACS joint body on mountain snow cover, working group 2.
 
-### Notes
+Peak snow water equivalent (SWE) extracted from ERA5-Land for the GMBA mountain inventory v2.0. Peak SWE is taken as for Apr 1. Maps show anomalies relative to the climatology 1991-2020.
 
-Note that ERA5-Land has a simplistic snow scheme and coarse resolution for complex mountain terrain, but nonetheless shows good accuracy for large-scale SWE monitoring (see references). Positive SWE anomalies capped to a maximum of 150%. 
+GBMA polygons have been simplified by a factor of 5 for simpler and faster online accessibility.
+
+ERA5-Land processing by S. Gascoin ([sgascoin](https://github.com/sgascoin)), in-situ data by C. Mortimer ([mortc](https://github.com/mortc)), dashboard by M. Matiu ([mitmat](https://github.com/mitmat))
+
+
+
+
+# Notes
+
+Note that ERA5-Land has a simplistic snow scheme and coarse resolution for complex mountain terrain, but nonetheless shows good accuracy for large-scale SWE monitoring (see references).
+
+Positive SWE anomalies capped to a maximum of 150%. 
 
 SWE values (and consequently anomalies) for glaciated areas, such as in the Arctic, might not be reliable.
 
-### Version history
+# Version history
+
+v0.3 (2025-09-18)
+
+- added 2025 anomalies
+- minor restructuring
 
 v0.2 (2024-06-14)
 
@@ -194,23 +52,8 @@ v0.1 (2024-05-29)
 
 - first online version
 
-## Column 
 
-### About
-
-
-This is a contribution to the IACS joint body on mountain snow cover, working group 2.
-
-Peak snow water equivalent (SWE) extracted from ERA5-Land for the GMBA mountain inventory v2.0. Peak SWE is taken as for Apr 1. Maps show anomalies of the 2023-2024 season relative to the climatology 1991-2020.
-
-GBMA polygons have been simplified by a factor of 5 for simpler and faster online accessibility.
-
-ERA5-Land processing by S. Gascoin ([sgascoin](https://github.com/sgascoin)), in-situ data by C. Mortimer ([mortc](https://github.com/mortc)), dashboard by M. Matiu ([mitmat](https://github.com/mitmat))
-
-
-
-
-### References 
+# References 
 
 Snethlage, M.A., Geschke, J., Spehn, E.M., Ranipeta, A., Yoccoz, N.G., Körner, Ch., Jetz, W., Fischer, M. & Urbach, D. A hierarchical inventory of the world’s mountains for global comparative mountain science. Nature Scientific Data. https://doi.org/10.1038/s41597-022-01256-y (2022).
 Dataset

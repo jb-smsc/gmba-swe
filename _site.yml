@@ -1,3 +1,16 @@
-name: "GMBA SWE"
+name: "GMBA SWE anomalies"
 output_dir: docs
 exclude: ["data","data-raw","fig","R","temp-backup", "LICENSE"]
+navbar:
+  title: "GMBA SWE anomalies"
+  left:
+    - href: index.html
+      text: Home
+    - href: 2024.html
+      text: 2024
+    - href: 2025.html
+      text: 2025
+  right:
+    - icon: fa-github
+      text: Source Code
+      href: https://github.com/jb-smsc/gmba-swe
